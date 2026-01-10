@@ -6,41 +6,61 @@
 
 Find the temporal offset between two videos using perceptual hashing or direct pixel comparison (SAD).
 
-This tool is useful for:
+**Contents:**
+
+- [Why Do We Need This?](#why-do-we-need-this)
+- [Requirements and Installation](#requirements-and-installation)
+- [Usage](#usage)
+- [How does it work?](#how-does-it-work)
+  - [Hashing/Comparison Algorithms](#hashingcomparison-algorithms)
+  - [Overall Flow](#overall-flow)
+- [Output Format](#output-format)
+- [API](#api)
+  - [Available Functions](#available-functions)
+  - [OffsetResult Fields](#offsetresult-fields)
+- [License](#license)
+
+## Why Do We Need This?
+
+I've too often encountered slightly offset video files, which are a pain to sync for calculating full-reference video quality metrics (like VMAF). Based on an earlier, PSNR-based Python script, this is now a fully-featured – and much faster! – tool to find the temporal offset between two videos.
+
+This tool is generally useful for:
 
 - Synchronizing videos from different sources
 - A/V sync analysis
 - Video quality comparison (aligning reference and test videos)
 - Finding where a clip appears in a longer video
 
-The algorithm is robust to:
+The default algorithm uses perceptual hashing and therefore is robust to:
 
 - Different resolutions
 - Different quality/compression levels
 - Color grading differences
 - Minor geometric distortions
 
-## Requirements
+## Requirements and Installation
 
-- [uv](https://docs.astral.sh/uv/) (recommended) or Python 3.11+
-
-## Installation
-
-No installation required! Just run directly with `uvx`:
+Using [uv](https://docs.astral.sh/uv/getting-started/installation/):
 
 ```bash
 uvx video-offset-finder ref.mp4 dist.mp4
 ```
 
-Or install globally:
+Using [pipx](https://pipx.pypa.io/latest/installation/):
 
 ```bash
-uv tool install video-offset-finder
+pipx install video-offset-finder
+```
+
+Or, using pip:
+
+```bash
+pip install video-offset-finder
 ```
 
 ## Usage
 
-### Basic Usage
+Let's say you have two video files, `reference.mp4` and `distorted.mp4`, and you want to find the temporal offset between them. You can use the command-line tool as follows:
 
 ```bash
 # Find offset between reference and distorted/delayed video
@@ -53,7 +73,9 @@ uvx video-offset-finder ref.mp4 dist.mp4 --start-offset 10 --max-search-offset 1
 uvx video-offset-finder ref.mp4 dist.mp4 -v
 ```
 
-### CLI Reference
+The tool will output JSON with the detected offset and confidence score. For the output format, see [Output Format](#output-format).
+
+Full usage:
 
 ```
 usage: video-offset-finder [-h] [-t {phash,dhash,ahash,whash,sad}]
@@ -91,36 +113,42 @@ options:
   --version             show program's version number and exit
 ```
 
-### Comparison Algorithms
+## How does it work?
 
-| Algorithm | Speed | Robustness | Best For |
-|-----------|-------|------------|----------|
-| `phash` | Medium | High | General use (default) |
-| `dhash` | Fast | Medium | Fast processing |
-| `ahash` | Fastest | Lower | Very fast estimates |
-| `whash` | Slowest | Highest | Difficult comparisons |
-| `sad` | Fast | Medium | Identical/similar quality videos |
+### Hashing/Comparison Algorithms
 
-**Perceptual Hash Algorithms:**
+There are different algorithms available for comparing frames, each with their own trade-offs:
+
+| Algorithm | Speed   | Robustness | Best For                         |
+| --------- | ------- | ---------- | -------------------------------- |
+| `phash`   | Medium  | High       | General use (default)            |
+| `dhash`   | Fast    | Medium     | Fast processing                  |
+| `ahash`   | Fastest | Lower      | Very fast estimates              |
+| `whash`   | Slowest | Highest    | Difficult comparisons            |
+| `sad`     | Fast    | Medium     | Identical/similar quality videos |
+
+The first four are "perceptual hash" algorithms from the ImageHash library:
 
 - **phash** (Perceptual Hash): Applies a [Discrete Cosine Transform](https://en.wikipedia.org/wiki/Discrete_cosine_transform) (DCT) to capture low-frequency components, similar to JPEG compression. Most robust to scaling and minor edits.
 - **dhash** (Difference Hash): Compares the brightness of adjacent pixels horizontally. Fast and effective for detecting shifts/translations.
 - **ahash** (Average Hash): Compares each pixel to the average brightness of the image. Simplest and fastest, but less robust to changes.
 - **whash** (Wavelet Hash): Uses [Haar wavelet](https://en.wikipedia.org/wiki/Haar_wavelet) decomposition for multi-resolution analysis. Most robust to compression artifacts and color changes.
 
-All hash algorithms reduce an image to a compact binary fingerprint. Similarity is measured via [Hamming distance](https://en.wikipedia.org/wiki/Hamming_distance) (number of differing bits) – lower distance means more similar images.
+All hash algorithms reduce an image to a compact binary fingerprint. For more details, see the [ImageHash library documentation](https://github.com/JohannesBuchner/imagehash).
 
-For more details, see the [ImageHash library documentation](https://github.com/JohannesBuchner/imagehash).
+The last algorithm is direct pixel comparison:
 
-**Direct Pixel Comparison:**
+- **sad** (Sum of Absolute Differences): Directly compares pixel values between frames after resizing to a common resolution (64x64 grayscale). Computes the sum of absolute differences between corresponding pixels. Fast and effective when videos have similar quality/encoding, but less robust to compression artifacts or color grading differences than perceptual hashes. This will not work when the videos have different resolutions.
 
-- **sad** (Sum of Absolute Differences): Directly compares pixel values between frames after resizing to a common resolution (64x64 grayscale). Computes the sum of absolute differences between corresponding pixels. Fast and effective when videos have similar quality/encoding, but less robust to compression artifacts or color grading differences than perceptual hashes.
+### Overall Flow
 
 The tool uses a hierarchical coarse-to-fine search, where each pass computes frame signatures and immediately performs cross-correlation, then uses that result to narrow the search window for the next pass:
 
 1. **Coarse pass** (1 fps): Compute signatures for both videos at low frame rate, find approximate offset via cross-correlation
 2. **Fine pass** (10 fps): Compute signatures only within a ±2s window around the coarse result, refine the offset
 3. **Frame-accurate pass** (native fps): Compute signatures within a ±0.5s window around the fine result for exact frame matching
+
+This speeds up the process significantly while maintaining accuracy.
 
 Cross-correlation finds the global optimum by computing the total distance (Hamming for hashes, SAD for pixel comparison) at each possible offset, avoiding local minima that can trap simple difference-based approaches.
 
@@ -153,18 +181,21 @@ The tool outputs JSON to stdout:
 }
 ```
 
-### Output Fields
+The fields are as follows:
 
-| Field | Description |
-|-------|-------------|
-| `offset_frames` | Offset in frames (at `fps_used` rate) |
-| `offset_seconds` | Offset in seconds |
-| `confidence` | Average distance (lower = better match, 0 = identical). Hamming distance for hash algorithms, SAD for pixel comparison. |
-| `fps_used` | Frame rate used for final measurement |
-| `method` | Algorithm used for final result |
-| `compute_time` | Processing time in seconds |
+| Field              | Description                                                                                                             |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `offset_frames`    | Offset in frames (at `fps_used` rate)                                                                                   |
+| `offset_seconds`   | Offset in seconds                                                                                                       |
+| `offset_timestamp` | Offset in `HH:MM:SS.sss` format                                                                                         |
+| `confidence`       | Average distance (lower = better match, 0 = identical). Hamming distance for hash algorithms, SAD for pixel comparison. |
+| `fps_used`         | Frame rate used for final measurement                                                                                   |
+| `method`           | Algorithm used for final result                                                                                         |
+| `compute_time`     | Processing time in seconds                                                                                              |
 
-A **positive offset** means the distorted video is delayed relative to the reference (starts later). A **negative offset** means the distorted video is ahead (starts earlier).
+> [!NOTE]
+>
+> A **positive offset** means the distorted video is delayed relative to the reference (starts later). A **negative offset** means the distorted video is ahead (starts earlier).
 
 ## API
 
