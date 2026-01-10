@@ -1,5 +1,9 @@
 # Video Offset Finder
 
+[![PyPI version](https://img.shields.io/pypi/v/video-offset-finder.svg)](https://pypi.org/project/video-offset-finder)
+
+[![Python package](https://github.com/slhck/video-offset-finder/actions/workflows/python-package.yml/badge.svg)](https://github.com/slhck/video-offset-finder/actions/workflows/python-package.yml)
+
 Find the temporal offset between two videos using perceptual hashing or direct pixel comparison (SAD).
 
 This tool is useful for:
