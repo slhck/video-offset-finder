@@ -1,7 +1,7 @@
 """Perceptual hashing and comparison functions for video frames."""
 
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Sequence, Union
 
 import imagehash
 import numpy as np
@@ -102,6 +102,7 @@ def compute_video_signatures(
     )
 
     for timestamp, image in tqdm(frames, total=estimated_frames, desc=desc):
+        sig: FrameSignature
         if compare_type == CompareType.SAD:
             sig = compute_sad_signature(image)
         else:
@@ -163,8 +164,8 @@ def cross_correlate_signatures(
 
 
 def _cross_correlate_hashes(
-    ref_hashes: list[tuple[float, FrameSignature]],
-    dist_hashes: list[tuple[float, FrameSignature]],
+    ref_hashes: Sequence[tuple[float, FrameSignature]],
+    dist_hashes: Sequence[tuple[float, FrameSignature]],
 ) -> tuple[int, float]:
     """
     Find optimal alignment using cross-correlation of hash distances.
