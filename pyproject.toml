@@ -1,0 +1,53 @@
+[project]
+name = "video-offset-finder"
+version = "0.1.0"
+description = "Find the temporal offset between two videos using perceptual hashing"
+readme = "README.md"
+authors = [
+    { name = "Werner Robitza", email = "werner.robitza@gmail.com" }
+]
+license = { text = "MIT" }
+requires-python = ">=3.11"
+keywords = ["video", "offset", "sync", "perceptual-hash", "phash"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Multimedia :: Video",
+]
+dependencies = [
+    "imagehash>=4.3",
+    "pillow>=10.0",
+    "numpy>=1.24",
+    "av>=12.0",
+    "tqdm>=4.66",
+]
+
+[project.scripts]
+video-offset-finder = "video_offset_finder.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/slhck/video-offset-finder"
+Repository = "https://github.com/slhck/video-offset-finder"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "pre-commit>=4.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.18,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.mypy]
+ignore_missing_imports = true
