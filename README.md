@@ -43,7 +43,7 @@ The default algorithm uses perceptual hashing and therefore is robust to:
 Using [uv](https://docs.astral.sh/uv/getting-started/installation/):
 
 ```bash
-uvx video-offset-finder ref.mp4 dist.mp4
+uvx video-offset-finder
 ```
 
 Using [pipx](https://pipx.pypa.io/latest/installation/):
