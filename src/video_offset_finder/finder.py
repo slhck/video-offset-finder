@@ -31,6 +31,7 @@ def find_offset(
     max_duration: Optional[float] = None,
     refine_window: float = 2.0,
     frame_accurate: bool = True,
+    quiet: bool = False,
     # Backward compatibility parameter
     hash_type: Optional[CompareType] = None,
 ) -> OffsetResult:
@@ -51,6 +52,7 @@ def find_offset(
         max_duration: Maximum video duration to analyze (seconds)
         refine_window: Window size (seconds) around coarse result for refinement
         frame_accurate: If True, do final pass at native FPS for exact frame matching
+        quiet: If True, suppress progress bars
 
     Returns:
         OffsetResult with detected offset
@@ -93,6 +95,7 @@ def find_offset(
         start_time=start_offset,
         max_duration=ref_max_duration,
         desc="Reference (coarse)",
+        quiet=quiet,
     )
 
     # Compute distorted video signatures
@@ -104,6 +107,7 @@ def find_offset(
         hash_size,
         max_duration=dist_search_duration,
         desc="Distorted (coarse)",
+        quiet=quiet,
     )
 
     # Find best offset via cross-correlation
@@ -137,6 +141,7 @@ def find_offset(
             start_time=fine_start,
             max_duration=fine_duration + refine_window,
             desc="Reference (fine)",
+            quiet=quiet,
         )
 
         dist_sigs_fine = compute_video_signatures(
@@ -146,6 +151,7 @@ def find_offset(
             hash_size,
             max_duration=fine_duration,
             desc="Distorted (fine)",
+            quiet=quiet,
         )
 
         fine_offset_frames, fine_distance = cross_correlate_signatures(
@@ -179,6 +185,7 @@ def find_offset(
             start_time=frame_start,
             max_duration=frame_duration + frame_window,
             desc="Reference (native)",
+            quiet=quiet,
         )
 
         dist_sigs_native = compute_video_signatures(
@@ -188,6 +195,7 @@ def find_offset(
             hash_size,
             max_duration=frame_duration,
             desc="Distorted (native)",
+            quiet=quiet,
         )
 
         native_offset_frames, native_distance = cross_correlate_signatures(

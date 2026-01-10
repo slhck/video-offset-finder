@@ -87,7 +87,10 @@ approximate offset, then refines at higher FPS.
         "-v", "--verbose", action="store_true", help="Enable debug logging"
     )
     parser.add_argument(
-        "-V", "--version", action="version", version=f"%(prog)s {__version__}"
+        "-q", "--quiet", action="store_true", help="Suppress progress bars and logging"
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}"
     )
 
     return parser
@@ -98,10 +101,13 @@ def main() -> None:
     parser = create_parser()
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-    )
+    if args.quiet:
+        logging.disable(logging.CRITICAL)
+    else:
+        logging.basicConfig(
+            level=logging.DEBUG if args.verbose else logging.INFO,
+            format="%(asctime)s - %(levelname)s - %(message)s",
+        )
 
     if not args.ref.exists():
         logging.error(f"Reference video not found: {args.ref}")
@@ -123,6 +129,7 @@ def main() -> None:
         max_search_offset=args.max_search_offset,
         max_duration=args.max_duration,
         refine_window=args.refine_window,
+        quiet=args.quiet,
     )
 
     end_time = datetime.now()

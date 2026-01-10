@@ -68,6 +68,7 @@ def compute_video_signatures(
     max_duration: Optional[float] = None,
     max_frames: Optional[int] = None,
     desc: str = "Computing signatures",
+    quiet: bool = False,
 ) -> list[tuple[float, FrameSignature]]:
     """
     Compute frame signatures (hashes or SAD arrays) for video frames.
@@ -81,6 +82,7 @@ def compute_video_signatures(
         max_duration: Maximum duration to process
         max_frames: Maximum number of frames to process
         desc: Description for progress bar
+        quiet: If True, suppress progress bar
 
     Returns:
         List of (timestamp, signature) tuples
@@ -103,7 +105,9 @@ def compute_video_signatures(
         max_frames or float("inf"),
     )
 
-    for timestamp, image in tqdm(frames, total=estimated_frames, desc=desc):
+    for timestamp, image in tqdm(
+        frames, total=estimated_frames, desc=desc, disable=quiet
+    ):
         sig: FrameSignature
         if compare_type == CompareType.SAD:
             sig = compute_sad_signature(image)

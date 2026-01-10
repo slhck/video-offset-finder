@@ -60,7 +60,7 @@ usage: video-offset-finder [-h] [-t {phash,dhash,ahash,whash,sad}]
                            [--hash-size HASH_SIZE] [--coarse-fps COARSE_FPS]
                            [--fine-fps FINE_FPS] [-o START_OFFSET]
                            [-s MAX_SEARCH_OFFSET] [-m MAX_DURATION]
-                           [--refine-window REFINE_WINDOW] [-v] [-V]
+                           [--refine-window REFINE_WINDOW] [-v] [-q] [--version]
                            ref dist
 
 positional arguments:
@@ -87,7 +87,8 @@ options:
   --refine-window REFINE_WINDOW
                         Window size around coarse result for refinement (default: 2.0s)
   -v, --verbose         Enable debug logging
-  -V, --version         show program's version number and exit
+  -q, --quiet           Suppress progress bars and logging (only output JSON)
+  --version             show program's version number and exit
 ```
 
 ### Comparison Algorithms
@@ -191,6 +192,7 @@ result = find_offset(
     max_search_offset=20.0,          # Limit search range
     max_duration=60.0,               # Only analyze first 60s
     frame_accurate=True,             # Final pass at native FPS
+    quiet=True,                      # Suppress progress bars
 )
 
 # Using SAD (direct pixel comparison)
