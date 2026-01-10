@@ -140,6 +140,7 @@ def main() -> None:
         "distorted": str(args.dist),
         "offset_frames": result.offset_frames,
         "offset_seconds": result.offset_seconds,
+        "offset_timestamp": result.offset_timestamp,
         "confidence": result.confidence,
         "fps_used": result.fps_used,
         "method": result.method,

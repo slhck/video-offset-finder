@@ -9,6 +9,16 @@ from .models import CompareType, OffsetResult
 from .video import get_video_info
 
 
+def format_timestamp(seconds: float) -> str:
+    """Convert seconds to HH:MM:SS.ms format."""
+    millis = int((seconds - int(seconds)) * 1000)
+    total_seconds = int(seconds)
+    hrs = total_seconds // 3600
+    mins = (total_seconds % 3600) // 60
+    secs = total_seconds % 60
+    return f"{hrs:02}:{mins:02}:{secs:02}.{millis:03}"
+
+
 def find_offset(
     ref_path: Path,
     dist_path: Path,
@@ -194,6 +204,7 @@ def find_offset(
         return OffsetResult(
             offset_frames=int(round(native_offset_seconds * native_fps)),
             offset_seconds=native_offset_seconds,
+            offset_timestamp=format_timestamp(native_offset_seconds),
             confidence=native_distance,
             fps_used=native_fps,
             method=f"frame_accurate_{compare_type.value}",
@@ -202,6 +213,7 @@ def find_offset(
     return OffsetResult(
         offset_frames=int(round(current_offset * ref_info.fps)),
         offset_seconds=current_offset,
+        offset_timestamp=format_timestamp(current_offset),
         confidence=current_distance,
         fps_used=current_fps,
         method=f"hierarchical_{compare_type.value}",

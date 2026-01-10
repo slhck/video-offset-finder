@@ -134,6 +134,7 @@ The tool outputs JSON to stdout:
   "distorted": "distorted.mp4",
   "offset_frames": 150,
   "offset_seconds": 5.005,
+  "offset_timestamp": "00:00:05.005",
   "confidence": 2.34,
   "fps_used": 29.97,
   "method": "frame_accurate_phash",

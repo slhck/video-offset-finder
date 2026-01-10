@@ -37,6 +37,7 @@ class OffsetResult:
 
     offset_frames: int
     offset_seconds: float
+    offset_timestamp: str  # HH:MM:SS.ms format
     confidence: float  # Lower is better (Hamming distance)
     fps_used: float
     method: str
