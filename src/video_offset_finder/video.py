@@ -54,10 +54,26 @@ def extract_frames(
         stream.thread_type = "AUTO"
 
         source_fps = float(stream.average_rate or stream.base_rate or 25)
-        time_base = stream.time_base or 1
+        time_base = float(stream.time_base) if stream.time_base else 1.0
         frame_interval = source_fps / target_fps
 
         first_pts_time: Optional[float] = None
+
+        # Seek to start_time if specified (with some margin before)
+        # This avoids decoding all frames from the beginning
+        if start_time > 0.5:
+            # First, decode one frame to get the baseline first_pts_time
+            # This is needed for proper timestamp normalization after seeking
+            for first_frame in container.decode(video=0):
+                if first_frame.pts is not None:
+                    first_pts_time = float(first_frame.pts * time_base)
+                break
+
+            # Now seek to target position (0.5s before start_time to account for keyframes)
+            seek_time = max(0, start_time - 0.5)
+            seek_pts = int(seek_time / time_base)
+            container.seek(seek_pts, stream=stream)
+
         frames_in_range = 0  # Count frames within the extraction range
         next_sample_idx: float = 0  # Next frame index (within range) to sample
         frames_yielded = 0
