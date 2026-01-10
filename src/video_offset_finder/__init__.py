@@ -22,12 +22,10 @@ from .finder import find_offset
 from .hashing import (
     compute_hash,
     compute_sad_signature,
-    compute_video_hashes,
     compute_video_signatures,
-    cross_correlate_hashes,
     cross_correlate_signatures,
 )
-from .models import CompareType, HashType, OffsetResult, VideoInfo
+from .models import CompareType, OffsetResult, VideoInfo
 from .video import extract_frames, get_video_info
 
 __version__ = version("video-offset-finder")
@@ -37,7 +35,6 @@ __all__ = [
     "find_offset",
     # Models
     "CompareType",
-    "HashType",  # Backward compatibility alias
     "OffsetResult",
     "VideoInfo",
     # Video utilities
@@ -46,9 +43,7 @@ __all__ = [
     # Comparison utilities
     "compute_hash",
     "compute_sad_signature",
-    "compute_video_hashes",
     "compute_video_signatures",
-    "cross_correlate_hashes",
     "cross_correlate_signatures",
     # Version
     "__version__",

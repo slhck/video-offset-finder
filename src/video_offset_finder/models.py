@@ -15,10 +15,6 @@ class CompareType(str, Enum):
     SAD = "sad"  # Sum of Absolute Differences, direct pixel comparison
 
 
-# Backward compatibility alias
-HashType = CompareType
-
-
 @dataclass
 class VideoInfo:
     """Basic video metadata."""

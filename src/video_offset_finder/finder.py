@@ -32,8 +32,6 @@ def find_offset(
     refine_window: float = 2.0,
     frame_accurate: bool = True,
     quiet: bool = False,
-    # Backward compatibility parameter
-    hash_type: Optional[CompareType] = None,
 ) -> OffsetResult:
     """
     Find video offset using hierarchical coarse-to-fine search.
@@ -57,8 +55,7 @@ def find_offset(
     Returns:
         OffsetResult with detected offset
     """
-    # Support old hash_type parameter for backward compatibility
-    compare_type = compare_type or hash_type or CompareType.PHASH
+    compare_type = compare_type or CompareType.PHASH
 
     ref_info = get_video_info(ref_path)
     dist_info = get_video_info(dist_path)

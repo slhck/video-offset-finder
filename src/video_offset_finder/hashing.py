@@ -118,27 +118,6 @@ def compute_video_signatures(
     return signatures
 
 
-# Backward compatibility alias
-def compute_video_hashes(
-    path: Path,
-    fps: float,
-    compare_type: Optional[CompareType] = None,
-    hash_size: int = 16,
-    start_time: float = 0,
-    max_duration: Optional[float] = None,
-    max_frames: Optional[int] = None,
-    desc: str = "Computing hashes",
-    # Backward compatibility parameter
-    hash_type: Optional[CompareType] = None,
-) -> list[tuple[float, FrameSignature]]:
-    """Backward compatible alias for compute_video_signatures."""
-    # Support old hash_type parameter for backward compatibility
-    actual_type = compare_type or hash_type or CompareType.PHASH
-    return compute_video_signatures(
-        path, fps, actual_type, hash_size, start_time, max_duration, max_frames, desc
-    )
-
-
 def hash_to_array(h: imagehash.ImageHash) -> np.ndarray:
     """Convert ImageHash to numpy array of bits."""
     return np.array(h.hash.flatten(), dtype=np.int8)
@@ -274,12 +253,3 @@ def _cross_correlate_sad(
             best_offset = offset
 
     return best_offset, min_avg_sad
-
-
-# Backward compatibility alias
-def cross_correlate_hashes(
-    ref_hashes: list[tuple[float, imagehash.ImageHash]],
-    dist_hashes: list[tuple[float, imagehash.ImageHash]],
-) -> tuple[int, float]:
-    """Backward compatible alias for hash-based cross correlation."""
-    return _cross_correlate_hashes(ref_hashes, dist_hashes)

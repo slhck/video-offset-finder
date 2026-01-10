@@ -9,7 +9,7 @@ from video_offset_finder import (
     CompareType,
     compute_hash,
     compute_sad_signature,
-    compute_video_hashes,
+    compute_video_signatures,
     extract_frames,
     get_video_info,
 )
@@ -140,9 +140,9 @@ class TestHashing:
 
         assert hash1 == hash2
 
-    def test_compute_video_hashes(self, synthetic_reference: Path) -> None:
-        """Test compute_video_hashes returns list of tuples."""
-        hashes = compute_video_hashes(
+    def test_compute_video_signatures(self, synthetic_reference: Path) -> None:
+        """Test compute_video_signatures returns list of tuples."""
+        hashes = compute_video_signatures(
             synthetic_reference,
             fps=2.0,
             compare_type=CompareType.PHASH,
@@ -161,7 +161,7 @@ class TestHashSimilarity:
 
     def test_similar_frames_have_low_distance(self, bbb_reference: Path) -> None:
         """Adjacent frames should have similar hashes (after initial fade-in)."""
-        hashes = compute_video_hashes(
+        hashes = compute_video_signatures(
             bbb_reference,
             fps=30.0,  # High fps = consecutive frames are similar
             compare_type=CompareType.PHASH,
