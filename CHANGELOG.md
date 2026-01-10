@@ -1,3 +1,16 @@
+## [0.3.0] - 2026-01-10
+
+### 🚜 Refactor
+
+- Remove old aliases
+
+### 📚 Documentation
+
+- Update
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 0.3.0
 ## [0.2.0] - 2026-01-10
 
 ### 🚀 Features

@@ -1,6 +1,6 @@
 [project]
 name = "video-offset-finder"
-version = "0.2.0"
+version = "0.3.0"
 description = "Find the temporal offset between two videos using perceptual hashing"
 readme = "README.md"
 authors = [
