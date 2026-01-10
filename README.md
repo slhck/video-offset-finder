@@ -11,7 +11,7 @@ Find the temporal offset between two videos using perceptual hashing or direct p
 - [Why Do We Need This?](#why-do-we-need-this)
 - [Requirements and Installation](#requirements-and-installation)
 - [Usage](#usage)
-- [How does it work?](#how-does-it-work)
+- [How Does It Work?](#how-does-it-work)
   - [Hashing/Comparison Algorithms](#hashingcomparison-algorithms)
   - [Overall Flow](#overall-flow)
 - [Output Format](#output-format)
@@ -113,7 +113,7 @@ options:
   --version             show program's version number and exit
 ```
 
-## How does it work?
+## How Does It Work?
 
 ### Hashing/Comparison Algorithms
 
