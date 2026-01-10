@@ -1,5 +1,6 @@
 """Perceptual hashing and comparison functions for video frames."""
 
+import math
 from pathlib import Path
 from typing import Optional, Sequence, Union
 
@@ -94,10 +95,11 @@ def compute_video_signatures(
     )
 
     # Estimate total frames for progress bar
+    # Use ceiling to avoid underestimating (which causes tqdm to drop the progress bar)
     video_info = get_video_info(path)
     duration = max_duration or (video_info.duration - start_time)
     estimated_frames = min(
-        int(duration * fps) if duration > 0 else video_info.frame_count,
+        math.ceil(duration * fps) + 1 if duration > 0 else video_info.frame_count,
         max_frames or float("inf"),
     )
 
