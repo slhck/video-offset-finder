@@ -283,8 +283,12 @@ class TestNegativeOffset:
     def test_negative_offset_with_different_hash_types(
         self, synthetic_reference: Path, synthetic_offset_5s: Path
     ) -> None:
-        """Negative offsets with fine search should work with different comparison algorithms."""
-        for compare_type in [CompareType.PHASH, CompareType.DHASH, CompareType.SAD]:
+        """Negative offsets with fine search should work with different comparison algorithms.
+
+        Note: DHASH excluded because synthetic testsrc produces identical dhash values
+        for frames 6s apart, causing false matches. DHASH is tested with BBB content instead.
+        """
+        for compare_type in [CompareType.PHASH, CompareType.SAD]:
             result = find_offset(
                 ref_path=synthetic_offset_5s,
                 dist_path=synthetic_reference,
@@ -377,8 +381,12 @@ class TestNegativeOffset:
     def test_negative_offset_different_algorithms_coarse_only(
         self, synthetic_reference: Path, synthetic_offset_5s: Path
     ) -> None:
-        """Coarse-only negative offset works with different hash types."""
-        for compare_type in [CompareType.PHASH, CompareType.DHASH, CompareType.SAD]:
+        """Coarse-only negative offset works with different hash types.
+
+        Note: DHASH excluded because synthetic testsrc produces identical dhash values
+        for frames 6s apart, causing false matches. DHASH is tested with BBB content instead.
+        """
+        for compare_type in [CompareType.PHASH, CompareType.SAD]:
             result = find_offset(
                 ref_path=synthetic_offset_5s,
                 dist_path=synthetic_reference,
@@ -395,6 +403,31 @@ class TestNegativeOffset:
             assert abs(result.offset_seconds - (-5.0)) < 1.0, (
                 f"{compare_type.value} coarse-only: Expected ~-5s, got {result.offset_seconds}s"
             )
+
+    def test_negative_offset_dhash_with_real_content(
+        self, bbb_reference: Path, bbb_offset_5s: Path
+    ) -> None:
+        """Test DHASH negative offset with real content (BBB).
+
+        DHASH doesn't work well with synthetic testsrc due to repeating patterns,
+        but works correctly with real video content.
+        """
+        result = find_offset(
+            ref_path=bbb_offset_5s,
+            dist_path=bbb_reference,
+            compare_type=CompareType.DHASH,
+            coarse_fps=1.0,
+            fine_fps=5.0,
+            frame_accurate=False,
+            quiet=True,
+        )
+
+        assert result.offset_seconds < 0, (
+            f"DHASH: Expected negative offset, got {result.offset_seconds}s"
+        )
+        assert abs(result.offset_seconds - (-5.0)) < 1.0, (
+            f"DHASH: Expected offset ~-5s, got {result.offset_seconds}s"
+        )
 
 
 class TestCombinedParameters:
