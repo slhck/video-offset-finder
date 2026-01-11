@@ -1,3 +1,17 @@
+## [0.3.1] - 2026-01-11
+
+### 🐛 Bug Fixes
+
+- Negative frame offset search
+
+### 📚 Documentation
+
+- Title case
+- Fix instructions
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 0.3.1
 ## [0.3.0] - 2026-01-10
 
 ### 🚜 Refactor
