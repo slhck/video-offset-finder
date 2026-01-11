@@ -11,10 +11,11 @@ Find the temporal offset between two videos using perceptual hashing or direct p
 - [Why Do We Need This?](#why-do-we-need-this)
 - [Requirements and Installation](#requirements-and-installation)
 - [Usage](#usage)
+- [Output Format](#output-format)
 - [How Does It Work?](#how-does-it-work)
   - [Hashing/Comparison Algorithms](#hashingcomparison-algorithms)
   - [Overall Flow](#overall-flow)
-- [Output Format](#output-format)
+  - [Search Parameters Visualized](#search-parameters-visualized)
 - [API](#api)
   - [Available Functions](#available-functions)
   - [OffsetResult Fields](#offsetresult-fields)
@@ -77,7 +78,7 @@ The tool will output JSON with the detected offset and confidence score. For the
 
 Full usage:
 
-```
+```text
 usage: video-offset-finder [-h] [-t {phash,dhash,ahash,whash,sad}]
                            [--hash-size HASH_SIZE] [--coarse-fps COARSE_FPS]
                            [--fine-fps FINE_FPS] [-o START_OFFSET]
@@ -112,45 +113,6 @@ options:
   -q, --quiet           Suppress progress bars and logging (only output JSON)
   --version             show program's version number and exit
 ```
-
-## How Does It Work?
-
-### Hashing/Comparison Algorithms
-
-There are different algorithms available for comparing frames, each with their own trade-offs:
-
-| Algorithm | Speed   | Robustness | Best For                         |
-| --------- | ------- | ---------- | -------------------------------- |
-| `phash`   | Medium  | High       | General use (default)            |
-| `dhash`   | Fast    | Medium     | Fast processing                  |
-| `ahash`   | Fastest | Lower      | Very fast estimates              |
-| `whash`   | Slowest | Highest    | Difficult comparisons            |
-| `sad`     | Fast    | Medium     | Identical/similar quality videos |
-
-The first four are "perceptual hash" algorithms from the ImageHash library:
-
-- **phash** (Perceptual Hash): Applies a [Discrete Cosine Transform](https://en.wikipedia.org/wiki/Discrete_cosine_transform) (DCT) to capture low-frequency components, similar to JPEG compression. Most robust to scaling and minor edits.
-- **dhash** (Difference Hash): Compares the brightness of adjacent pixels horizontally. Fast and effective for detecting shifts/translations.
-- **ahash** (Average Hash): Compares each pixel to the average brightness of the image. Simplest and fastest, but less robust to changes.
-- **whash** (Wavelet Hash): Uses [Haar wavelet](https://en.wikipedia.org/wiki/Haar_wavelet) decomposition for multi-resolution analysis. Most robust to compression artifacts and color changes.
-
-All hash algorithms reduce an image to a compact binary fingerprint. For more details, see the [ImageHash library documentation](https://github.com/JohannesBuchner/imagehash).
-
-The last algorithm is direct pixel comparison:
-
-- **sad** (Sum of Absolute Differences): Directly compares pixel values between frames after resizing to a common resolution (64x64 grayscale). Computes the sum of absolute differences between corresponding pixels. Fast and effective when videos have similar quality/encoding, but less robust to compression artifacts or color grading differences than perceptual hashes. This will not work when the videos have different resolutions.
-
-### Overall Flow
-
-The tool uses a hierarchical coarse-to-fine search, where each pass computes frame signatures and immediately performs cross-correlation, then uses that result to narrow the search window for the next pass:
-
-1. **Coarse pass** (1 fps): Compute signatures for both videos at low frame rate, find approximate offset via cross-correlation
-2. **Fine pass** (10 fps): Compute signatures only within a ±2s window around the coarse result, refine the offset
-3. **Frame-accurate pass** (native fps): Compute signatures within a ±0.5s window around the fine result for exact frame matching
-
-This speeds up the process significantly while maintaining accuracy.
-
-Cross-correlation finds the global optimum by computing the total distance (Hamming for hashes, SAD for pixel comparison) at each possible offset, avoiding local minima that can trap simple difference-based approaches.
 
 ## Output Format
 
@@ -196,6 +158,146 @@ The fields are as follows:
 > [!NOTE]
 >
 > A **positive offset** means the distorted video is delayed relative to the reference (starts later). A **negative offset** means the distorted video is ahead (starts earlier).
+
+## How Does It Work?
+
+This section explains the frame comparison methods, the overall search algorithm, and visualizes how the search parameters affect the process.
+
+### Hashing/Comparison Algorithms
+
+There are different algorithms available for comparing frames, each with their own trade-offs:
+
+| Algorithm | Speed   | Robustness | Best For                         |
+| --------- | ------- | ---------- | -------------------------------- |
+| `phash`   | Medium  | High       | General use (default)            |
+| `dhash`   | Fast    | Medium     | Fast processing                  |
+| `ahash`   | Fastest | Lower      | Very fast estimates              |
+| `whash`   | Slowest | Highest    | Difficult comparisons            |
+| `sad`     | Fast    | Medium     | Identical/similar quality videos |
+
+The first four are "perceptual hash" algorithms from the ImageHash library:
+
+- **phash** (Perceptual Hash): Applies a [Discrete Cosine Transform](https://en.wikipedia.org/wiki/Discrete_cosine_transform) (DCT) to capture low-frequency components, similar to JPEG compression. Most robust to scaling and minor edits.
+- **dhash** (Difference Hash): Compares the brightness of adjacent pixels horizontally. Fast and effective for detecting shifts/translations.
+- **ahash** (Average Hash): Compares each pixel to the average brightness of the image. Simplest and fastest, but less robust to changes.
+- **whash** (Wavelet Hash): Uses [Haar wavelet](https://en.wikipedia.org/wiki/Haar_wavelet) decomposition for multi-resolution analysis. Most robust to compression artifacts and color changes.
+
+All hash algorithms reduce an image to a compact binary fingerprint. For more details, see the [ImageHash library documentation](https://github.com/JohannesBuchner/imagehash).
+
+The last algorithm is direct pixel comparison:
+
+- **sad** (Sum of Absolute Differences): Directly compares pixel values between frames after resizing to a common resolution (64x64 grayscale). Computes the sum of absolute differences between corresponding pixels. Fast and effective when videos have similar quality/encoding, but less robust to compression artifacts or color grading differences than perceptual hashes. This will not work when the videos have different resolutions.
+
+### Overall Flow
+
+The tool uses a hierarchical coarse-to-fine search, where each pass computes frame signatures and immediately performs cross-correlation, then uses that result to narrow the search window for the next pass:
+
+1. **Coarse pass** (1 fps): Compute signatures for both videos at low frame rate, find approximate offset via cross-correlation
+2. **Fine pass** (10 fps): Compute signatures only within a ±2s window around the coarse result, refine the offset
+3. **Frame-accurate pass** (native fps): Compute signatures within a ±0.5s window around the fine result for exact frame matching
+
+This speeds up the process significantly while maintaining accuracy.
+
+Cross-correlation finds the global optimum by computing the total distance (Hamming for hashes, SAD for pixel comparison) at each possible offset, avoiding local minima that can trap simple difference-based approaches.
+
+### Search Parameters Visualized
+
+The following diagrams show how the offset detection and search parameters work.
+
+#### Default Case: Cut Video Within Source
+
+The most common scenario: a shorter "distorted" video is a clip extracted from the longer "reference" video:
+
+```text
+Reference (source):
+|======================================================|
+0s                                                    60s
+
+Distorted (cut):
+                    |=================|
+                   15s               35s
+
+                    ↑
+                    └── offset = 15s (positive: distorted
+                        starts later in timeline)
+
+Result: offset_seconds = 15.0
+```
+
+#### Negative Offset: Distorted Starts Earlier
+
+When the distorted video contains content that appears before the reference:
+
+```text
+Reference:
+                    |==============================|
+                   10s                            50s
+
+Distorted:
+|============================================|
+0s                                          40s
+
+↑
+└── offset = -10s (negative: distorted starts earlier in timeline)
+
+Result: offset_seconds = -10.0
+```
+
+#### Using `--start-offset` to Skip Reference Start
+
+If you know the match is not in the first N seconds of the reference, use `-o/--start-offset` to skip extracting those frames:
+
+```text
+Reference (60s total):
+|======================================================|
+0s                                                    60s
+
+With --start-offset 20, frames extracted from reference:
+|xxxxxxxxxxxxxxxxxxxx|=================================|
+0s   (not extracted) 20s                              60s
+
+Distorted (20s clip that matches at 30s):
+                              |=================|
+                             30s               50s
+
+Offset found = 30s
+```
+
+Skipping the first 20s of the reference speeds up processing. Matches before 20s in the reference cannot be found.
+
+#### Using `--max-search-offset` to Limit Analysis
+
+Use `-s/--max-search-offset` to limit how much of each video is analyzed, reducing processing time:
+
+```text
+Reference (60s), Distorted (20s), --max-search-offset 25:
+
+Reference frames extracted (25s + 20s = 45s):
+|==========================================|xxxxxxxxxxx|
+0s                                        45s         60s
+                                           (not extracted)
+
+Distorted frames extracted (up to 25s, but video is only 20s):
+|===================|
+0s                 20s  (full distorted used)
+```
+
+The algorithm analyzes fewer reference frames, speeding up processing. The cross-correlation still searches all possible alignments between the extracted frame sets.
+
+#### Using `--max-duration` to Limit Analysis Length
+
+Use `-m/--max-duration` to analyze only the first N seconds of the reference:
+
+```text
+Reference (60s), --max-duration 30:
+
+Reference frames extracted:
+|==============================|xxxxxxxxxxxxxxxxxxxxxxxxxxx|
+0s                            30s                         60s
+                               (not extracted)
+```
+
+This is useful for very long videos when you expect the match to be near the beginning.
 
 ## API
 

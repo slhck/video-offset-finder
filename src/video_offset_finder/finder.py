@@ -127,7 +127,16 @@ def find_offset(
     if fine_fps > coarse_fps:
         logging.debug(f"Phase 2: Fine search at {fine_fps} fps")
 
-        fine_start = max(0, current_offset - refine_window)
+        # Calculate search windows for both videos based on offset sign
+        # For positive offset: match is at ref[offset], dist[0]
+        # For negative offset: match is at ref[0], dist[-offset]
+        if current_offset >= 0:
+            ref_fine_start = max(0, current_offset - refine_window)
+            dist_fine_start = 0.0
+        else:
+            ref_fine_start = 0.0
+            dist_fine_start = max(0, -current_offset - refine_window)
+
         fine_duration = min(refine_window * 2, max_duration or dist_info.duration)
 
         ref_sigs_fine = compute_video_signatures(
@@ -135,7 +144,7 @@ def find_offset(
             fine_fps,
             compare_type,
             hash_size,
-            start_time=fine_start,
+            start_time=ref_fine_start,
             max_duration=fine_duration + refine_window,
             desc="Reference (fine)",
             quiet=quiet,
@@ -146,6 +155,7 @@ def find_offset(
             fine_fps,
             compare_type,
             hash_size,
+            start_time=dist_fine_start,
             max_duration=fine_duration,
             desc="Distorted (fine)",
             quiet=quiet,
@@ -154,7 +164,10 @@ def find_offset(
         fine_offset_frames, fine_distance = cross_correlate_signatures(
             ref_sigs_fine, dist_sigs_fine, compare_type
         )
-        current_offset = fine_offset_frames / fine_fps + fine_start
+        # Account for both start positions when calculating final offset
+        current_offset = (
+            fine_offset_frames / fine_fps + ref_fine_start - dist_fine_start
+        )
         current_distance = fine_distance
         current_fps = fine_fps
 
@@ -170,16 +183,23 @@ def find_offset(
 
         # Narrow window for final refinement (0.5s should be plenty after fine search)
         frame_window = 0.5
-        frame_start = max(0, current_offset - frame_window)
-        # Only need to analyze a few seconds of the distorted video
+        # Only need to analyze a few seconds of each video
         frame_duration = min(frame_window * 2, dist_info.duration)
+
+        # Calculate search windows for both videos based on offset sign
+        if current_offset >= 0:
+            ref_frame_start = max(0, current_offset - frame_window)
+            dist_frame_start = 0.0
+        else:
+            ref_frame_start = 0.0
+            dist_frame_start = max(0, -current_offset - frame_window)
 
         ref_sigs_native = compute_video_signatures(
             ref_path,
             native_fps,
             compare_type,
             hash_size,
-            start_time=frame_start,
+            start_time=ref_frame_start,
             max_duration=frame_duration + frame_window,
             desc="Reference (native)",
             quiet=quiet,
@@ -190,6 +210,7 @@ def find_offset(
             native_fps,
             compare_type,
             hash_size,
+            start_time=dist_frame_start,
             max_duration=frame_duration,
             desc="Distorted (native)",
             quiet=quiet,
@@ -198,7 +219,10 @@ def find_offset(
         native_offset_frames, native_distance = cross_correlate_signatures(
             ref_sigs_native, dist_sigs_native, compare_type
         )
-        native_offset_seconds = native_offset_frames / native_fps + frame_start
+        # Account for both start positions when calculating final offset
+        native_offset_seconds = (
+            native_offset_frames / native_fps + ref_frame_start - dist_frame_start
+        )
 
         logging.debug(
             f"Frame-accurate result: offset = {native_offset_seconds:.4f}s "
