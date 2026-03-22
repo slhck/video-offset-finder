@@ -41,13 +41,10 @@ Repository = "https://github.com/slhck/video-offset-finder"
 dev = [
     "pytest>=8.0",
     "ruff>=0.4",
-    "mypy>=1.10",
     "pre-commit>=4.0",
+    "ty>=0.0.24",
 ]
 
 [build-system]
 requires = ["uv_build>=0.9.18,<0.10.0"]
 build-backend = "uv_build"
-
-[tool.mypy]
-ignore_missing_imports = true
