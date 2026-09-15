@@ -62,8 +62,8 @@ approximate offset, then refines at higher FPS.
         "-o",
         "--start-offset",
         type=float,
-        default=0,
-        help="Known minimum offset in seconds (default: 0)",
+        default=None,
+        help="Minimum offset to search in seconds (default: unlimited)",
     )
     parser.add_argument(
         "-s",
@@ -149,6 +149,8 @@ def main() -> None:
         "offset_seconds": result.offset_seconds,
         "offset_timestamp": result.offset_timestamp,
         "confidence": result.confidence,
+        "second_best_confidence": result.second_best_confidence,
+        "overlap_frames": result.overlap_frames,
         "fps_used": result.fps_used,
         "method": result.method,
         "settings": {

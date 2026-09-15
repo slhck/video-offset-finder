@@ -56,16 +56,10 @@ class TestStartOffset:
             f"Expected ~5s offset with start_offset=4, got {result.offset_seconds}s"
         )
 
-    def test_start_offset_still_finds_earlier_match(
+    def test_start_offset_excludes_earlier_match(
         self, synthetic_reference: Path, synthetic_offset_2s: Path
     ) -> None:
-        """Even with start_offset=3 and actual offset at 2s, algorithm may still find correct offset.
-
-        The cross-correlation can still find matches that occur before the start_offset
-        position because the distorted video is analyzed from its beginning. The algorithm
-        adds start_offset to the frame offset, so finding a match at frame -1 at coarse 1fps
-        from position 3 would give 3 + (-1) = 2s.
-        """
+        """An actual match before start_offset must not be returned."""
         result = find_offset(
             ref_path=synthetic_reference,
             dist_path=synthetic_offset_2s,
@@ -77,10 +71,7 @@ class TestStartOffset:
             quiet=True,
         )
 
-        # The algorithm actually still finds the correct offset
-        assert abs(result.offset_seconds - 2.0) < 0.5, (
-            f"Expected ~2s offset, got {result.offset_seconds}s"
-        )
+        assert result.offset_seconds >= 3.0
 
     def test_start_offset_zero_is_default(
         self, synthetic_reference: Path, synthetic_offset_2s: Path
@@ -105,8 +96,7 @@ class TestStartOffset:
 class TestMaxSearchOffset:
     """Test the max_search_offset (-s/--max-search-offset) parameter.
 
-    max_search_offset limits the maximum offset to search in seconds.
-    It affects how much of the distorted video and reference video are analyzed.
+    max_search_offset limits the maximum candidate offset in seconds.
     """
 
     def test_max_search_offset_includes_match(
@@ -128,19 +118,15 @@ class TestMaxSearchOffset:
             f"Expected ~2s offset with max_search_offset=5, got {result.offset_seconds}s"
         )
 
-    def test_max_search_offset_affects_dist_extraction(
+    def test_max_search_offset_excludes_later_match(
         self, synthetic_reference: Path, synthetic_offset_5s: Path
     ) -> None:
-        """max_search_offset limits how much of the distorted video is analyzed.
-
-        With max_search_offset=3, only 3s of distorted video is analyzed.
-        However, with a 5s distorted video containing content from 5-10s of timeline,
-        the first 3s of distorted (timeline 5-8s) may still match reference (0-10s).
-        """
+        """A match beyond max_search_offset must not be returned."""
         result = find_offset(
             ref_path=synthetic_reference,
             dist_path=synthetic_offset_5s,
             compare_type=CompareType.PHASH,
+            start_offset=0.0,
             max_search_offset=3.0,
             coarse_fps=1.0,
             fine_fps=5.0,
@@ -148,11 +134,7 @@ class TestMaxSearchOffset:
             quiet=True,
         )
 
-        # The algorithm can still find the 5s offset because it affects search range,
-        # not the possible offset values directly
-        assert abs(result.offset_seconds - 5.0) < 1.0, (
-            f"Expected ~5s offset with max_search_offset=3, got {result.offset_seconds}s"
-        )
+        assert 0 <= result.offset_seconds <= 3.0
 
     def test_max_search_offset_unlimited_by_default(
         self, synthetic_reference: Path, synthetic_offset_5s: Path
@@ -442,7 +424,7 @@ class TestCombinedParameters:
             dist_path=synthetic_offset_5s,
             compare_type=CompareType.PHASH,
             start_offset=4.0,  # Start at 4s
-            max_search_offset=3.0,  # Search up to 3s from dist start
+            max_search_offset=7.0,
             coarse_fps=1.0,
             fine_fps=5.0,
             frame_accurate=False,
@@ -450,10 +432,7 @@ class TestCombinedParameters:
         )
 
         # With start_offset=4 and match at 5s, should still find it
-        # max_search_offset limits dist analysis, not the final offset
-        assert result.offset_seconds >= 4.0, (
-            f"Expected offset >= 4s (start_offset), got {result.offset_seconds}s"
-        )
+        assert 4.0 <= result.offset_seconds <= 7.0
 
     def test_start_offset_with_max_duration(
         self, synthetic_reference: Path, synthetic_offset_5s: Path

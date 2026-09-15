@@ -102,7 +102,7 @@ options:
                         FPS for coarse search (default: 1.0)
   --fine-fps FINE_FPS   FPS for fine search (default: 10.0)
   -o, --start-offset START_OFFSET
-                        Known minimum offset in seconds (default: 0)
+                        Minimum offset to search in seconds (default: unlimited)
   -s, --max-search-offset MAX_SEARCH_OFFSET
                         Maximum offset to search in seconds (default: unlimited)
   -m, --max-duration MAX_DURATION
@@ -127,6 +127,8 @@ The tool outputs JSON to stdout:
   "offset_seconds": 5.005,
   "offset_timestamp": "00:00:05.005",
   "confidence": 2.34,
+  "second_best_confidence": 12.81,
+  "overlap_frames": 91,
   "fps_used": 29.97,
   "method": "frame_accurate_phash",
   "settings": {
@@ -134,7 +136,7 @@ The tool outputs JSON to stdout:
     "hash_size": 16,
     "coarse_fps": 1.0,
     "fine_fps": 10.0,
-    "start_offset": 0,
+    "start_offset": null,
     "max_search_offset": null,
     "max_duration": null,
     "refine_window": 2.0,
@@ -151,6 +153,8 @@ The fields are as follows:
 | `offset_seconds`   | Offset in seconds                                                                                                       |
 | `offset_timestamp` | Offset in `HH:MM:SS.sss` format                                                                                         |
 | `confidence`       | Average distance (lower = better match, 0 = identical). Hamming distance for hash algorithms, SAD for pixel comparison. |
+| `second_best_confidence` | Distance of the second-best candidate, useful for judging ambiguity. |
+| `overlap_frames`   | Number of frames compared for the selected candidate. |
 | `fps_used`         | Frame rate used for final measurement                                                                                   |
 | `method`           | Algorithm used for final result                                                                                         |
 | `compute_time`     | Processing time in seconds                                                                                              |
@@ -158,6 +162,10 @@ The fields are as follows:
 > [!NOTE]
 >
 > A **positive offset** means the distorted video is delayed relative to the reference (starts later). A **negative offset** means the distorted video is ahead (starts earlier).
+>
+> The result tells you how much earlier or later one video starts. Duplicate or
+> missing frames in the middle do not change this start offset. Finding those
+> changes requires a frame-by-frame alignment map.
 
 ## How Does It Work?
 
@@ -186,19 +194,19 @@ All hash algorithms reduce an image to a compact binary fingerprint. For more de
 
 The last algorithm is direct pixel comparison:
 
-- **sad** (Sum of Absolute Differences): Directly compares pixel values between frames after resizing to a common resolution (64x64 grayscale). Computes the sum of absolute differences between corresponding pixels. Fast and effective when videos have similar quality/encoding, but less robust to compression artifacts or color grading differences than perceptual hashes. This will not work when the videos have different resolutions.
+- **sad** (Sum of Absolute Differences): Directly compares pixel values between frames after resizing both inputs to 64x64 grayscale. It is fast and effective when videos have similar quality/encoding, but less robust to compression artifacts or color grading differences than perceptual hashes.
 
 ### Overall Flow
 
-The tool uses a hierarchical coarse-to-fine search, where each pass computes frame signatures and immediately performs cross-correlation, then uses that result to narrow the search window for the next pass:
+The tool uses a hierarchical coarse-to-fine search. For ordinary clips, it decodes and hashes each input once at the highest required cadence, then selects timestamped subsets from that cache for each pass:
 
 1. **Coarse pass** (1 fps): Compute signatures for both videos at low frame rate, find approximate offset via cross-correlation
 2. **Fine pass** (10 fps): Compute signatures only within a ±2s window around the coarse result, refine the offset
 3. **Frame-accurate pass** (native fps): Compute signatures within a ±0.5s window around the fine result for exact frame matching
 
-This speeds up the process significantly while maintaining accuracy.
+For very long videos, the tool reads only the section needed for each search step to limit memory use. It uses each frame's timestamp to choose samples. If no new frame exists for a sample time, it uses the previous frame again. The decoder resizes frames before hashing to save work. Wavelet hashing keeps the original frame size because resizing it first would change the hash.
 
-Cross-correlation finds the global optimum by computing the total distance (Hamming for hashes, SAD for pixel comparison) at each possible offset, avoiding local minima that can trap simple difference-based approaches.
+For each allowed offset, the tool compares the overlapping frames and averages their differences. At least half of the shorter sequence must overlap. This stops a single matching frame at the edge from winning. Hash modes count different bits, while SAD adds up pixel differences. The result includes the best score, the second-best score, and the number of frames compared.
 
 ### Search Parameters Visualized
 
@@ -245,7 +253,7 @@ Result: offset_seconds = -10.0
 
 #### Using `--start-offset` to Skip Reference Start
 
-If you know the match is not in the first N seconds of the reference, use `-o/--start-offset` to skip extracting those frames:
+If you know the match is not before N seconds, use `-o/--start-offset` to set the minimum candidate offset:
 
 ```text
 Reference (60s total):
@@ -263,11 +271,11 @@ Distorted (20s clip that matches at 30s):
 Offset found = 30s
 ```
 
-Skipping the first 20s of the reference speeds up processing. Matches before 20s in the reference cannot be found.
+Matches before 20s cannot be returned. On long inputs that use phase-specific extraction, this also avoids decoding the beginning of the reference.
 
-#### Using `--max-search-offset` to Limit Analysis
+#### Using `--max-search-offset` to Bound the Search
 
-Use `-s/--max-search-offset` to limit how much of each video is analyzed, reducing processing time:
+Use `-s/--max-search-offset` to set the maximum candidate offset:
 
 ```text
 Reference (60s), Distorted (20s), --max-search-offset 25:
@@ -277,27 +285,27 @@ Reference frames extracted (25s + 20s = 45s):
 0s                                        45s         60s
                                            (not extracted)
 
-Distorted frames extracted (up to 25s, but video is only 20s):
+Distorted query:
 |===================|
-0s                 20s  (full distorted used)
+0s                 20s
 ```
 
-The algorithm analyzes fewer reference frames, speeding up processing. The cross-correlation still searches all possible alignments between the extracted frame sets.
+Only candidates at or before 25s are considered. The reference only needs to cover the search range plus the distorted query duration.
 
 #### Using `--max-duration` to Limit Analysis Length
 
-Use `-m/--max-duration` to analyze only the first N seconds of the reference:
+Use `-m/--max-duration` to limit the query duration used from both videos:
 
 ```text
 Reference (60s), --max-duration 30:
 
-Reference frames extracted:
+Reference and distorted query interval:
 |==============================|xxxxxxxxxxxxxxxxxxxxxxxxxxx|
 0s                            30s                         60s
                                (not extracted)
 ```
 
-This is useful for very long videos when you expect the match to be near the beginning.
+This is useful when a shorter excerpt contains enough distinctive content to locate the match.
 
 ## API
 
@@ -347,6 +355,7 @@ from video_offset_finder import (
     CompareType,    # Enum: PHASH, DHASH, AHASH, WHASH, SAD
     VideoInfo,      # Dataclass with video metadata
     OffsetResult,   # Dataclass with detection result
+    CorrelationResult, # Detailed correlation result
 
     # Video utilities
     get_video_info,   # Extract video metadata
@@ -357,6 +366,7 @@ from video_offset_finder import (
     compute_sad_signature,      # Compute SAD signature for a single image
     compute_video_signatures,   # Compute signatures for all frames in a video
     cross_correlate_signatures, # Find best alignment between signature sequences
+    cross_correlate_signatures_detailed, # Include second-best score and overlap
 )
 ```
 
@@ -370,6 +380,8 @@ class OffsetResult:
     confidence: float     # Distance metric (lower = better)
     fps_used: float       # FPS used for measurement
     method: str           # Algorithm identifier
+    second_best_confidence: float | None # Runner-up distance
+    overlap_frames: int   # Frames compared for the selected candidate
 ```
 
 ## License

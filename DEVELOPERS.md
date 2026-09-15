@@ -16,7 +16,7 @@ src/video_offset_finder/
 
 ## Default Flow
 
-The algorithm uses a three-phase hierarchical search to efficiently find the temporal offset between two videos:
+The search has three steps. For shorter videos, it reads each video once and reuses the frame signatures in all three steps. For longer videos, it reads only the parts needed for each step to keep memory use under control.
 
 ```
 ┌─────────────────────────────┐
@@ -24,10 +24,16 @@ The algorithm uses a three-phase hierarchical search to efficiently find the tem
 └──────────────┬──────────────┘
                ▼
 ┌─────────────────────────────┐
+│ Decode + signature cache    │
+│  ─────────────────────────  │
+│ PTS-based CFR sampling      │
+│ Decoder-side scaling        │
+└──────────────┬──────────────┘
+               ▼
+┌─────────────────────────────┐
 │  Phase 1: Coarse (1 fps)    │
 │  ─────────────────────────  │
-│  Extract frames             │
-│  Compute signatures         │
+│  Select cached signatures   │
 │  Cross-correlate            │
 │  → Offset ±1s               │
 └──────────────┬──────────────┘
@@ -36,8 +42,7 @@ The algorithm uses a three-phase hierarchical search to efficiently find the tem
 │  Phase 2: Fine (10 fps)     │
 │  ─────────────────────────  │
 │  Window ±2s                 │
-│  Extract frames             │
-│  Compute signatures         │
+│  Select cached signatures   │
 │  Cross-correlate            │
 │  → Offset ±0.1s             │
 └──────────────┬──────────────┘
@@ -46,8 +51,7 @@ The algorithm uses a three-phase hierarchical search to efficiently find the tem
 │  Phase 3: Native fps        │
 │  ─────────────────────────  │
 │  Window ±0.5s               │
-│  Extract frames             │
-│  Compute signatures         │
+│  Select cached signatures   │
 │  Cross-correlate            │
 │  → Frame-accurate           │
 └──────────────┬──────────────┘
@@ -62,13 +66,14 @@ The algorithm uses a three-phase hierarchical search to efficiently find the tem
 The core matching algorithm compares signatures across all possible temporal offsets:
 
 ```
-For each offset from (-n_dist+1) to n_ref:
+For each offset allowed by the search bounds and minimum overlap:
     1. Determine overlapping frame regions
     2. Compute distance between aligned frames:
-       - Hash-based: Hamming distance (bit differences)
+       - Hash-based: packed XOR + byte population count
        - SAD-based: Sum of absolute pixel differences
     3. Average distance across overlapping frames
-    4. Track offset with minimum average distance
+    4. Track best and second-best distance plus overlap length
 
-Return: (best_offset, minimum_distance)
+The compatibility API returns `(best_offset, minimum_distance)`. The detailed
+API returns `CorrelationResult` with the runner-up score and overlap length.
 ```

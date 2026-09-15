@@ -34,6 +34,7 @@ def extract_frames(
     start_time: float = 0,
     max_duration: Optional[float] = None,
     max_frames: Optional[int] = None,
+    image_size: Optional[tuple[int, int]] = None,
 ) -> Iterator[tuple[float, Image.Image]]:
     """
     Extract frames from video at specified FPS.
@@ -44,18 +45,24 @@ def extract_frames(
         start_time: Start time in seconds (relative to video start, not PTS)
         max_duration: Maximum duration to extract (seconds)
         max_frames: Maximum number of frames to extract
+        image_size: Optional decoder-side output size (width, height)
 
     Yields:
-        Tuple of (relative_timestamp_seconds, PIL.Image)
-        The timestamp is relative to the video start (0-based), not absolute PTS.
+        Tuple of (sampling_timestamp_seconds, PIL.Image). Sampling uses a
+        constant-rate timeline and holds the most recent decoded frame for a
+        slot. This matches conventional CFR conversion when source timestamps
+        are irregular or the target rate is higher than the source rate.
     """
     with av.open(str(path)) as container:
         stream = container.streams.video[0]
         stream.thread_type = "AUTO"
 
+        if target_fps <= 0:
+            raise ValueError("target_fps must be greater than zero")
+
         source_fps = float(stream.average_rate or stream.base_rate or 25)
         time_base = float(stream.time_base) if stream.time_base else 1.0
-        frame_interval = source_fps / target_fps
+        sample_interval = 1.0 / target_fps
 
         first_pts_time: Optional[float] = None
 
@@ -74,17 +81,25 @@ def extract_frames(
             seek_pts = int(seek_time / time_base)
             container.seek(seek_pts, stream=stream)
 
-        frames_in_range = 0  # Count frames within the extraction range
-        next_sample_idx: float = 0  # Next frame index (within range) to sample
+        next_sample_time = max(0.0, start_time)
         frames_yielded = 0
+        decoded_index = 0
+        previous_frame: Optional[av.VideoFrame] = None
+
+        def to_image(frame: av.VideoFrame) -> Image.Image:
+            if image_size is None:
+                return frame.to_image()
+            return frame.to_image(width=image_size[0], height=image_size[1])
 
         for frame in container.decode(video=0):
             # Get absolute PTS timestamp
             if frame.pts is not None:
                 abs_timestamp = float(frame.pts * time_base)
             else:
-                # Fallback for frames without PTS
-                abs_timestamp = 0  # Will be corrected by first_pts_time logic
+                # Preserve a useful monotonic timeline for uncommon streams
+                # whose decoded frames do not carry timestamps.
+                abs_timestamp = decoded_index / source_fps
+            decoded_index += 1
 
             # Normalize to video-relative time (first frame = 0)
             if first_pts_time is None:
@@ -92,22 +107,26 @@ def extract_frames(
 
             relative_time = abs_timestamp - first_pts_time
 
-            # Skip frames before start_time
-            if relative_time < start_time:
-                continue
-
-            # Check duration limit (relative to start_time)
-            if max_duration and (relative_time - start_time) > max_duration:
-                break
-
-            # Check frame limit
-            if max_frames and frames_yielded >= max_frames:
-                break
-
-            # Sample at target FPS (using frame count within extraction range)
-            if frames_in_range >= next_sample_idx:
-                yield relative_time, frame.to_image()
-                next_sample_idx += frame_interval
+            # Emit every CFR slot preceding this decoded frame using the most
+            # recent frame. In particular, a missing source timestamp becomes
+            # a repeated frame rather than shifting the entire sequence.
+            while previous_frame is not None and next_sample_time < relative_time:
+                if (
+                    max_duration is not None
+                    and next_sample_time > start_time + max_duration
+                ):
+                    return
+                if max_frames is not None and frames_yielded >= max_frames:
+                    return
+                yield next_sample_time, to_image(previous_frame)
+                next_sample_time += sample_interval
                 frames_yielded += 1
 
-            frames_in_range += 1
+            previous_frame = frame
+
+        # Emit the final exact slot, but do not extend the video beyond the
+        # timestamp of its last decoded frame.
+        if previous_frame is not None and next_sample_time <= relative_time:
+            if max_duration is None or next_sample_time <= start_time + max_duration:
+                if max_frames is None or frames_yielded < max_frames:
+                    yield next_sample_time, to_image(previous_frame)

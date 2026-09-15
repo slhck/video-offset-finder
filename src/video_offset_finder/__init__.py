@@ -24,8 +24,9 @@ from .hashing import (
     compute_sad_signature,
     compute_video_signatures,
     cross_correlate_signatures,
+    cross_correlate_signatures_detailed,
 )
-from .models import CompareType, OffsetResult, VideoInfo
+from .models import CompareType, CorrelationResult, OffsetResult, VideoInfo
 from .video import extract_frames, get_video_info
 
 __version__ = version("video-offset-finder")
@@ -36,6 +37,7 @@ __all__ = [
     # Models
     "CompareType",
     "OffsetResult",
+    "CorrelationResult",
     "VideoInfo",
     # Video utilities
     "get_video_info",
@@ -45,6 +47,7 @@ __all__ = [
     "compute_sad_signature",
     "compute_video_signatures",
     "cross_correlate_signatures",
+    "cross_correlate_signatures_detailed",
     # Version
     "__version__",
 ]

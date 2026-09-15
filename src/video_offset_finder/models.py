@@ -37,3 +37,15 @@ class OffsetResult:
     confidence: float  # Lower is better (Hamming distance)
     fps_used: float
     method: str
+    second_best_confidence: float | None = None
+    overlap_frames: int = 0
+
+
+@dataclass(frozen=True)
+class CorrelationResult:
+    """Detailed result for signature cross-correlation."""
+
+    offset_frames: int
+    distance: float
+    second_best_distance: float | None
+    overlap_frames: int

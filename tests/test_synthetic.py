@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from video_offset_finder import CompareType, find_offset
+from video_offset_finder.finder import format_timestamp
 
 
 class TestSyntheticOffsetDetection:
@@ -130,7 +131,6 @@ class TestSyntheticCompareTypes:
             f"Compare type {compare_type.value} failed: expected ~2s, got {result.offset_seconds}s"
         )
 
-    @pytest.mark.xfail(reason="ahash struggles with synthetic testsrc patterns")
     def test_ahash_finds_offset(
         self,
         synthetic_reference: Path,
@@ -184,3 +184,6 @@ class TestSyntheticEdgeCases:
 
         # Confidence is distance metric, should be reasonably low for matching content
         assert result.confidence < 50, f"Confidence too high: {result.confidence}"
+
+    def test_negative_subsecond_timestamp(self) -> None:
+        assert format_timestamp(-1 / 60) == "-00:00:00.016"

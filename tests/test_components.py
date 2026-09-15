@@ -1,7 +1,10 @@
 """Tests for individual components: video utilities and hashing."""
 
+from fractions import Fraction
 from pathlib import Path
 
+import imagehash
+import numpy as np
 import pytest
 from PIL import Image
 
@@ -10,9 +13,13 @@ from video_offset_finder import (
     compute_hash,
     compute_sad_signature,
     compute_video_signatures,
+    cross_correlate_signatures,
+    cross_correlate_signatures_detailed,
     extract_frames,
+    find_offset,
     get_video_info,
 )
+from video_offset_finder.hashing import FrameSignature
 
 # Hash types (excluding SAD which is not a hash algorithm)
 HASH_TYPES = [
@@ -93,6 +100,48 @@ class TestFrameExtraction:
 
         # Should get roughly 10 frames in 1 second at 10 fps
         assert 8 <= len(frames) <= 12
+
+    def test_extract_frames_holds_previous_frame_for_missing_pts(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Irregular PTS are resampled on time, including CFR duplicates."""
+
+        class FakeFrame:
+            def __init__(self, pts: int) -> None:
+                self.pts = pts
+
+            def to_image(self, **_kwargs: int) -> Image.Image:
+                return Image.new("L", (1, 1), self.pts)
+
+        class FakeStream:
+            average_rate = Fraction(4, 1)
+            base_rate = Fraction(4, 1)
+            time_base = Fraction(1, 4)
+            thread_type = ""
+
+        class FakeStreams:
+            video = [FakeStream()]
+
+        class FakeContainer:
+            streams = FakeStreams()
+
+            def __enter__(self) -> "FakeContainer":
+                return self
+
+            def __exit__(self, *_args: object) -> None:
+                return None
+
+            def decode(self, video: int = 0) -> list[FakeFrame]:
+                assert video == 0
+                return [FakeFrame(0), FakeFrame(2), FakeFrame(3)]
+
+        monkeypatch.setattr(
+            "video_offset_finder.video.av.open", lambda _path: FakeContainer()
+        )
+        frames = list(extract_frames(Path("irregular.mp4"), target_fps=4.0))
+
+        assert [timestamp for timestamp, _ in frames] == [0.0, 0.25, 0.5, 0.75]
+        assert [image.getpixel((0, 0)) for _, image in frames] == [0, 0, 2, 3]
 
 
 class TestHashing:
@@ -182,3 +231,71 @@ class TestHashSimilarity:
         assert avg_distance < 50, (
             f"Average adjacent frame distance {avg_distance} too high"
         )
+
+
+class TestCorrelation:
+    """Tests for overlap-safe correlation and diagnostics."""
+
+    def test_rejects_perfect_single_frame_edge_match(self) -> None:
+        ref: list[tuple[float, FrameSignature]] = [
+            (float(i), np.array([10], dtype=np.uint8)) for i in range(3)
+        ]
+        dist: list[tuple[float, FrameSignature]] = [
+            (0.0, np.array([0], dtype=np.uint8)),
+            (1.0, np.array([0], dtype=np.uint8)),
+            (2.0, np.array([10], dtype=np.uint8)),
+        ]
+
+        result = cross_correlate_signatures_detailed(
+            ref, dist, CompareType.SAD, min_overlap_fraction=0.5
+        )
+
+        assert result.offset_frames != 2
+        assert result.overlap_frames >= 2
+        assert result.second_best_distance is not None
+
+    def test_packed_hash_correlation_matches_identical_sequence(self) -> None:
+        hashes: list[tuple[float, FrameSignature]] = [
+            (
+                float(value),
+                imagehash.ImageHash(np.unpackbits(np.array([value], dtype=np.uint8))),
+            )
+            for value in (3, 17, 99, 201)
+        ]
+
+        offset, distance = cross_correlate_signatures(hashes, hashes)
+
+        assert offset == 0
+        assert distance == 0
+
+
+class TestSignatureCaching:
+    """Tests for reuse of decoded signatures between search phases."""
+
+    def test_short_inputs_are_decoded_once_each(
+        self,
+        synthetic_reference: Path,
+        synthetic_offset_2s: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        calls = 0
+
+        def counted_compute(*args: object, **kwargs: object) -> object:
+            nonlocal calls
+            calls += 1
+            return compute_video_signatures(*args, **kwargs)  # type: ignore
+
+        monkeypatch.setattr(
+            "video_offset_finder.finder.compute_video_signatures", counted_compute
+        )
+
+        find_offset(
+            synthetic_reference,
+            synthetic_offset_2s,
+            coarse_fps=1.0,
+            fine_fps=5.0,
+            frame_accurate=True,
+            quiet=True,
+        )
+
+        assert calls == 2
